@@ -12,7 +12,7 @@ OUTPUT_REPO = "P2SAMAPA/p2-etf-natural-gradient-results"
 FI_COMMODITIES = ["TLT", "VCIT", "LQD", "HYG", "VNQ", "GLD", "SLV"]
 EQUITY_SECTORS = [
     "SPY", "QQQ", "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLP", "XLU",
-    "GDX", "XME", "IWF", "XSD", "XBI", "IWM", "IWD", "IWO"
+    "GDX", "XME", "IWF", "XSD", "XBI", "IWM"
 ]
 COMBINED = list(set(FI_COMMODITIES + EQUITY_SECTORS))
 UNIVERSES = {
@@ -26,12 +26,13 @@ LOOKBACK_WINDOW = 252
 TRANSACTION_COST = 0.001
 RISK_FREE_RATE = 0.0
 
-LEARNING_RATE = 0.5          # larger step
-FISHER_DAMP = 1e-6           # almost no damping
-MAX_ITER = 1000              # more iterations
+LEARNING_RATE = 0.5
+FISHER_DAMP = 1e-6
+MAX_ITER = 1000
 TOLERANCE = 1e-8
 
-RETURN_EMPHASIS = 1.0        # not used in Sharpe version, kept for compatibility
+# Not used in Sharpe version, kept for compatibility
+RETURN_EMPHASIS = 1.0
 
 REBALANCE_FREQ = 1
 TRAIN_START_DATE = "2008-01-01"
