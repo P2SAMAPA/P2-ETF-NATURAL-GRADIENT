@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import json
-import plotly.graph_objects as go
 import plotly.express as px
 from huggingface_hub import HfFileSystem
 import config
@@ -11,15 +10,20 @@ st.set_page_config(page_title="Natural Gradient Allocation", layout="wide")
 st.title("🧭 Natural Gradient Portfolio Allocation")
 st.caption("Fisher‑informed optimisation | Sortino objective | Riemannian geometry")
 
-# ... (keep custom CSS as before) ...
+# Show token status
+token = config.HF_TOKEN
+if token:
+    st.sidebar.success("HF_TOKEN is set")
+else:
+    st.sidebar.error("HF_TOKEN is NOT set – add it in Streamlit secrets")
 
 OUTPUT_REPO = config.OUTPUT_REPO
-HF_TOKEN = config.HF_TOKEN
 
 @st.cache_data(ttl=3600)
 def list_repo_files():
-    fs = HfFileSystem(token=HF_TOKEN)
+    fs = HfFileSystem(token=token)
     try:
+        # If token is None, it will try public access only
         all_files = [f['name'] for f in fs.ls(f"datasets/{OUTPUT_REPO}", detail=True, recursive=True) if f['type'] == 'file']
         return all_files
     except Exception as e:
@@ -34,81 +38,77 @@ def find_latest_json(file_list):
 
 @st.cache_data(ttl=3600)
 def load_json_from_path(full_path):
-    fs = HfFileSystem(token=HF_TOKEN)
+    fs = HfFileSystem(token=token)
     try:
         with fs.open(full_path, "r") as f:
             return json.load(f)
     except Exception as e:
         return {"error": str(e)}
 
+# Sidebar debug
+st.sidebar.subheader("Debug Info")
 file_list = list_repo_files()
-latest_json_path = find_latest_json(file_list)
-if latest_json_path is None:
-    st.error("❌ No JSON result file found.")
-    st.stop()
+st.sidebar.write(f"Files in repo: {len(file_list)}")
+for f in file_list[:5]:
+    st.sidebar.code(f)
 
-data = load_json_from_path(latest_json_path)
+latest_json = find_latest_json(file_list)
+if latest_json is None:
+    st.sidebar.error("No JSON file found")
+    st.error("No result JSON found. Run trainer first.")
+    st.stop()
+else:
+    st.sidebar.success(f"Latest: {latest_json}")
+
+data = load_json_from_path(latest_json)
 if "error" in data:
     st.error(f"Failed to load JSON: {data['error']}")
     st.stop()
 
-if "run_date" not in data or "universes" not in data:
-    st.error("JSON missing required keys.")
-    st.stop()
+st.sidebar.write(f"Run date: {data.get('run_date', '?')}")
+st.sidebar.write(f"Next trading day: {next_trading_day()}")
 
-st.sidebar.header("ℹ️ Info")
-st.sidebar.write(f"**Run date:** {data['run_date']}")
-st.sidebar.write(f"**Next trading day:** {next_trading_day()}")
-
-# Mode selector
-mode = st.sidebar.radio("Select allocation mode", ["Global", "Last 252 Days"], index=1)
-
-universes = data["universes"]
+universes = data.get("universes", {})
 if not universes:
-    st.warning("No universe data found.")
+    st.error("No 'universes' key in JSON")
+    st.json(data)
     st.stop()
+
+# Mode selector: based on available keys in first universe
+first_universe = next(iter(universes.values()))
+available_modes = [k for k in first_universe.keys() if k in ['global', 'last_252']]
+if not available_modes:
+    st.error(f"Unexpected keys: {list(first_universe.keys())}")
+    st.stop()
+mode = st.sidebar.radio("Allocation mode", available_modes, index=0 if 'global' in available_modes else 0)
 
 universe_names = list(universes.keys())
-selected = st.selectbox("🌍 Select Universe", universe_names)
+selected = st.selectbox("Select Universe", universe_names)
 
 if selected:
     uni_data = universes[selected]
-    # mode must exist in the dict
     if mode not in uni_data:
-        st.error(f"Mode '{mode}' not available for universe '{selected}'. Available: {list(uni_data.keys())}")
-        st.stop()
-    info = uni_data[mode]
-
-    if "weights" not in info or "top_picks" not in info:
-        st.error(f"Missing keys in {mode} data.")
-        st.stop()
-
-    weights = info["weights"]
-    top_picks = info["top_picks"]
-
-    st.subheader(f"📊 {selected} – {mode} Portfolio")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("📈 Number of Assets", len(weights))
-    with col2:
-        st.metric("🔍 Lookback Days", info.get("lookback_days", "—"))
-    with col3:
-        st.metric("📅 Training End Date", info.get("training_end_date", data['run_date']))
-    with col4:
-        top_ticker, top_weight = top_picks[0].values()
-        st.metric("🥇 Top ETF", f"{top_ticker} ({top_weight:.1%})")
-
-    st.markdown("### ⭐ Top 3 Recommended ETFs")
-    df_top = pd.DataFrame(top_picks)
-    st.dataframe(df_top.style.format({"weight": "{:.1%}"}), use_container_width=True, hide_index=True)
-
-    # Pie chart of weights (only non‑zero)
-    non_zero = {k: v for k, v in weights.items() if v > 0}
-    if non_zero:
-        fig = px.pie(names=list(non_zero.keys()), values=list(non_zero.values()), title="Portfolio Weights", hole=0.3)
-        st.plotly_chart(fig, use_container_width=True)
+        st.error(f"Mode '{mode}' not available for {selected}")
     else:
-        st.info("All weights are zero (should not happen).")
+        info = uni_data[mode]
+        weights = info.get("weights", {})
+        top_picks = info.get("top_picks", [])
+        if not weights:
+            st.warning("No weights found")
+        else:
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Assets", len(weights))
+            col2.metric("Lookback", info.get("lookback_days", "?"))
+            col3.metric("Top ETF", top_picks[0]['ticker'] if top_picks else "?")
+            col4.metric("Top Weight", f"{top_picks[0]['weight']:.1%}" if top_picks else "?")
 
-st.markdown("---")
-st.caption(f"Results from {OUTPUT_REPO} | Global uses full history (2008–present); Last 252 Days uses recent year.")
+            st.subheader("Top 3 ETFs")
+            df_top = pd.DataFrame(top_picks)
+            st.dataframe(df_top.style.format({"weight": "{:.1%}"}), hide_index=True, use_container_width=True)
+
+            non_zero = {k: v for k, v in weights.items() if v > 0}
+            if non_zero:
+                fig = px.pie(names=list(non_zero.keys()), values=list(non_zero.values()), title="Portfolio Allocation", hole=0.3)
+                st.plotly_chart(fig, use_container_width=True)
+
+st.caption(f"Data from {OUTPUT_REPO}")
