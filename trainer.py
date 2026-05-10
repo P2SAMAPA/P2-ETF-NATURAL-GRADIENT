@@ -1,5 +1,5 @@
 """
-Main training script for natural gradient allocation with top‑5 forced concentration.
+Main training script for natural gradient allocation with top‑5 concentration and return‑gradient weighting.
 """
 
 import pandas as pd
@@ -43,21 +43,30 @@ def main():
             transaction_cost=config.TRANSACTION_COST
         )
         ng.fit(train_returns)
-        weights = ng.predict_weights()
+        raw_weights = ng.predict_weights()
 
-        # --- Force allocation into top 5 ETFs only ---
-        top5_idx = np.argsort(weights)[-5:]      # indices of 5 largest weights
-        new_weights = np.zeros_like(weights)
-        new_weights[top5_idx] = weights[top5_idx]
-        new_weights = new_weights / new_weights.sum()   # renormalise to sum to 1
-        weights = new_weights
+        # --- Keep only top 5 ETFs ---
+        top5_idx = np.argsort(raw_weights)[-5:]
+        # Get raw weights of top 5
+        top5_raw = raw_weights[top5_idx]
+
+        # --- Apply concentration: raise to power (e.g., square) to exaggerate differences ---
+        concentration_power = 3.0   # higher = more extreme concentration (try 2,3,4)
+        concentrated = top5_raw ** concentration_power
+        # Normalise to sum to 1
+        final_weights = concentrated / concentrated.sum()
+
+        # Build final weight vector (all others zero)
+        weights = np.zeros(n_assets)
+        weights[top5_idx] = final_weights
 
         # Get top picks (now only non‑zero weights)
         top_picks = []
         for i in np.argsort(weights)[::-1]:
             if weights[i] > 0:
                 top_picks.append({"ticker": tickers[i], "weight": float(weights[i])})
-        top_picks = top_picks[:3]   # show top 3 in dashboard
+        # Keep top 3 for display
+        top_picks = top_picks[:3]
 
         universe_results = {
             "weights": {ticker: float(weights[i]) for i, ticker in enumerate(tickers)},
@@ -65,7 +74,8 @@ def main():
             "training_end_date": str(returns.index[-1].date()),
             "n_assets": n_assets,
             "lookback_days": config.LOOKBACK_WINDOW,
-            "forced_top5": True
+            "forced_top5": True,
+            "concentration_power": concentration_power
         }
         all_results[universe_name] = universe_results
 
@@ -75,7 +85,7 @@ def main():
         json.dump({"run_date": config.TODAY, "universes": all_results}, f, indent=2)
 
     push_results.push_daily_result(local_path)
-    print("\n=== Natural Gradient allocation complete (top‑5 forced) ===")
+    print("\n=== Natural Gradient allocation complete (top‑5, return‑weighted) ===")
 
 if __name__ == "__main__":
     main()
