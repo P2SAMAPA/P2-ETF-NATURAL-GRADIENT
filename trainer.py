@@ -1,5 +1,5 @@
 """
-Main training script for natural gradient allocation with top‑5 concentration and return‑gradient weighting.
+Main training script with debug output to diagnose equal weights.
 """
 
 import pandas as pd
@@ -24,7 +24,6 @@ def main():
         returns = data_manager.prepare_returns_matrix(df, tickers)
         if returns.empty:
             continue
-
         if len(returns) < config.LOOKBACK_WINDOW:
             print(f"  Insufficient data for {universe_name}, skipping.")
             continue
@@ -44,28 +43,27 @@ def main():
         )
         ng.fit(train_returns)
         raw_weights = ng.predict_weights()
+        print(f"Raw weights (first 5): {raw_weights[:5]}")
+        print(f"Raw weights sum: {raw_weights.sum()}")
 
-        # --- Keep only top 5 ETFs ---
+        # Keep top 5
         top5_idx = np.argsort(raw_weights)[-5:]
-        # Get raw weights of top 5
         top5_raw = raw_weights[top5_idx]
+        print(f"Top 5 raw weights: {top5_raw}")
 
-        # --- Apply concentration: raise to power (e.g., square) to exaggerate differences ---
-        concentration_power = 3.0   # higher = more extreme concentration (try 2,3,4)
+        # Use a very high concentration power (e.g., 10)
+        concentration_power = 10.0
         concentrated = top5_raw ** concentration_power
-        # Normalise to sum to 1
         final_weights = concentrated / concentrated.sum()
+        print(f"After power {concentration_power}: {final_weights}")
 
-        # Build final weight vector (all others zero)
         weights = np.zeros(n_assets)
         weights[top5_idx] = final_weights
 
-        # Get top picks (now only non‑zero weights)
         top_picks = []
         for i in np.argsort(weights)[::-1]:
             if weights[i] > 0:
                 top_picks.append({"ticker": tickers[i], "weight": float(weights[i])})
-        # Keep top 3 for display
         top_picks = top_picks[:3]
 
         universe_results = {
@@ -85,7 +83,7 @@ def main():
         json.dump({"run_date": config.TODAY, "universes": all_results}, f, indent=2)
 
     push_results.push_daily_result(local_path)
-    print("\n=== Natural Gradient allocation complete (top‑5, return‑weighted) ===")
+    print("\n=== Natural Gradient allocation complete (debug) ===")
 
 if __name__ == "__main__":
     main()
