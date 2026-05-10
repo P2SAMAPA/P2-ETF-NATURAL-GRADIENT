@@ -1,5 +1,5 @@
 """
-Main training script for natural gradient allocation with top‑5 concentration and Sharpe objective.
+Main training script for natural gradient allocation with top‑5 concentration and gradient smoothing.
 """
 
 import pandas as pd
@@ -44,7 +44,6 @@ def main():
         ng.fit(train_returns)
         raw_weights = ng.predict_weights()
 
-        # Print debug to see raw differentiation
         print(f"Raw weights (first 5): {raw_weights[:5]}")
         print(f"Raw weights sum: {raw_weights.sum()}")
 
@@ -53,11 +52,11 @@ def main():
         top5_raw = raw_weights[top5_idx]
         print(f"Top 5 raw weights: {top5_raw}")
 
-        # Apply concentration power (increase if still equal)
-        concentration_power = 5.0   # higher = more disparity
-        concentrated = top5_raw ** concentration_power
-        final_weights = concentrated / concentrated.sum()
-        print(f"After power {concentration_power}: {final_weights}")
+        # Smooth the gradient by raising to a power < 1
+        smoothing_power = 0.3   # try 0.3, 0.5, 0.7 – lower = more balanced
+        smoothed = top5_raw ** smoothing_power
+        final_weights = smoothed / smoothed.sum()
+        print(f"After smoothing (power={smoothing_power}): {final_weights}")
 
         weights = np.zeros(n_assets)
         weights[top5_idx] = final_weights
@@ -75,7 +74,7 @@ def main():
             "n_assets": n_assets,
             "lookback_days": config.LOOKBACK_WINDOW,
             "forced_top5": True,
-            "concentration_power": concentration_power
+            "smoothing_power": smoothing_power
         }
         all_results[universe_name] = universe_results
 
@@ -85,7 +84,7 @@ def main():
         json.dump({"run_date": config.TODAY, "universes": all_results}, f, indent=2)
 
     push_results.push_daily_result(local_path)
-    print("\n=== Natural Gradient allocation complete ===")
+    print("\n=== Natural Gradient allocation complete (smoothed gradient) ===")
 
 if __name__ == "__main__":
     main()
