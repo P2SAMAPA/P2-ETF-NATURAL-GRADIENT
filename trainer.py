@@ -31,7 +31,7 @@ def compute_allocation(returns_matrix, tickers, mode_name):
     top5_idx = np.argsort(raw_weights)[-5:]
     top5_raw = raw_weights[top5_idx]
     # Smoothing power (0.3 gives gradient; set to 1.0 for raw)
-    smoothing_power = 0.3
+    smoothing_power = 0.1
     smoothed = top5_raw ** smoothing_power
     final_weights = smoothed / smoothed.sum()
     weights = np.zeros(n_assets)
