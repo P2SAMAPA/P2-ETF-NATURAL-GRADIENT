@@ -14,7 +14,7 @@ OUTPUT_REPO = "P2SAMAPA/p2-etf-natural-gradient-results"
 FI_COMMODITIES = ["TLT", "VCIT", "LQD", "HYG", "VNQ", "GLD", "SLV"]
 EQUITY_SECTORS = [
     "SPY", "QQQ", "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLP", "XLU",
-    "GDX", "XME", "IWF", "XSD", "XBI", "IWM", "IWD", "IWO"
+    "GDX", "XME", "IWF", "XSD", "XBI", "IWM"
 ]
 COMBINED = list(set(FI_COMMODITIES + EQUITY_SECTORS))
 
@@ -28,7 +28,7 @@ UNIVERSES = {
 MACRO_COLS = ["VIX", "DXY", "T10Y2Y", "TBILL_3M"]
 
 # --- Natural Gradient hyperparameters ---
-LOOKBACK_WINDOW = 252      # days used to compute Sortino and Fisher
+LOOKBACK_WINDOW = 252      # days used to compute objective and Fisher
 TRANSACTION_COST = 0.001   # 10 bps
 RISK_FREE_RATE = 0.0       # annualised, used for Sortino (set to 0 for absolute return)
 DOWNSIDE_THRESHOLD = 0.0   # returns below this are considered downside
@@ -37,6 +37,10 @@ LEARNING_RATE = 0.1        # natural gradient step size
 FISHER_DAMP = 1e-4         # damping for Fisher matrix inversion
 MAX_ITER = 500             # max iterations for natural gradient optimisation
 TOLERANCE = 1e-6           # early stopping tol
+
+# New: higher value → more focus on return, less on downside risk
+# Start with 1.5, increase to 2.0, 3.0, or even 10.0 for aggressive return‑seeking
+RETURN_EMPHASIS = 1.5
 
 # --- Training schedule ---
 REBALANCE_FREQ = 1         # daily rebalancing
