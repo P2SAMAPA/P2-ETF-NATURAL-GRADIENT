@@ -53,7 +53,7 @@ def main():
         print(f"Top 5 raw weights: {top5_raw}")
 
         # Smooth the gradient by raising to a power < 1
-        smoothing_power = 0.3   # try 0.3, 0.5, 0.7 – lower = more balanced
+        smoothing_power = 0.5   # try 0.3, 0.5, 0.7 – lower = more balanced
         smoothed = top5_raw ** smoothing_power
         final_weights = smoothed / smoothed.sum()
         print(f"After smoothing (power={smoothing_power}): {final_weights}")
