@@ -11,23 +11,56 @@ st.set_page_config(page_title="Natural Gradient Allocation", layout="wide")
 st.title("🧭 Natural Gradient Portfolio Allocation")
 st.caption("Fisher‑informed optimisation | Sortino objective | Riemannian geometry")
 
-@st.cache_data(ttl=3600)
-def load_latest():
-    fs = HfFileSystem(token=config.HF_TOKEN)
-    try:
-        files = fs.ls(f"datasets/{config.OUTPUT_REPO}")
-        json_files = [f for f in files if f.endswith('.json')]
-        if not json_files:
-            return None
-        latest = max(json_files)
-        with fs.open(latest, "r") as fp:
-            return json.load(fp)
-    except:
-        return None
+OUTPUT_REPO = config.OUTPUT_REPO
+HF_TOKEN = config.HF_TOKEN
 
-data = load_latest()
-if not data:
-    st.warning("No results found. Run trainer.py first.")
+# Debug: list all files in the repo
+@st.cache_data(ttl=3600)
+def list_repo_files():
+    fs = HfFileSystem(token=HF_TOKEN)
+    try:
+        all_files = [f['name'] for f in fs.ls(f"datasets/{OUTPUT_REPO}", detail=True, recursive=True) if f['type'] == 'file']
+        return all_files
+    except Exception as e:
+        return [f"Error: {e}"]
+
+file_list = list_repo_files()
+st.sidebar.subheader("Debug: Files in HF dataset")
+for f in file_list:
+    st.sidebar.code(f, language="text")
+
+# Find the latest JSON file (by filename)
+def find_latest_json():
+    json_files = [f for f in file_list if f.endswith('.json') and 'natural_gradient' in f]
+    if not json_files:
+        return None
+    # Sort by filename (date part) descending
+    json_files.sort(reverse=True)
+    return json_files[0]
+
+@st.cache_data(ttl=3600)
+def load_json_from_path(full_path):
+    fs = HfFileSystem(token=HF_TOKEN)
+    try:
+        with fs.open(full_path, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        return {"error": str(e)}
+
+latest_json_path = find_latest_json()
+if latest_json_path is None:
+    st.error("No JSON result file found in the HF dataset. Please run trainer.py first.")
+    st.stop()
+
+st.sidebar.success(f"Latest result: {latest_json_path}")
+data = load_json_from_path(latest_json_path)
+if "error" in data:
+    st.error(f"Failed to load JSON: {data['error']}")
+    st.stop()
+
+if "run_date" not in data or "universes" not in data:
+    st.error("JSON does not contain expected keys ('run_date', 'universes'). Raw content:")
+    st.json(data)
     st.stop()
 
 st.sidebar.header("ℹ️ Info")
@@ -36,21 +69,28 @@ st.sidebar.write(f"**Next trading day:** {next_trading_day()}")
 st.sidebar.write("**Method:** Natural gradient (Fisher matrix) on Simplex")
 
 universes = data["universes"]
+if not universes:
+    st.warning("No universe data found in the JSON.")
+    st.stop()
+
 universe_names = list(universes.keys())
 selected = st.selectbox("Select Universe", universe_names)
 
 if selected:
     info = universes[selected]
+    # Check expected keys
+    if "weights" not in info or "top_picks" not in info:
+        st.error(f"Universe '{selected}' missing 'weights' or 'top_picks'. Structure: {list(info.keys())}")
+        st.stop()
     weights = info["weights"]
     top = info["top_picks"]
 
-    # Hero card
     st.subheader(f"Recommended Portfolio for {selected}")
     col1, col2 = st.columns([1, 1])
     with col1:
         st.metric("Number of Assets", len(weights))
-        st.metric("Lookback days", info["lookback_days"])
-        st.metric("Training end", info["training_end_date"])
+        st.metric("Lookback days", info.get("lookback_days", "?"))
+        st.metric("Training end", info.get("training_end_date", "?"))
     with col2:
         df_top = pd.DataFrame(top)
         st.dataframe(df_top, hide_index=True, use_container_width=True)
@@ -70,4 +110,4 @@ if selected:
     st.plotly_chart(fig_bar, use_container_width=True)
 
 st.markdown("---")
-st.caption(f"Data: {config.OUTPUT_REPO} | Optimises Sortino ratio using natural gradient")
+st.caption(f"Data: {OUTPUT_REPO} | Optimises Sortino ratio using natural gradient")
