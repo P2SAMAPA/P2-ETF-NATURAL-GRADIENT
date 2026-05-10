@@ -2,7 +2,7 @@ name: Daily Natural Gradient Allocation
 
 on:
   schedule:
-    - cron: '0 23 * * 1-5'   # Weekdays at 23:00 UTC
+    - cron: '0 02 * * 1-5'   # Weekdays at 23:00 UTC
   workflow_dispatch:
 
 jobs:
