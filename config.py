@@ -40,7 +40,7 @@ TOLERANCE = 1e-6           # early stopping tol
 
 # New: higher value → more focus on return, less on downside risk
 # Start with 1.5, increase to 2.0, 3.0, or even 10.0 for aggressive return‑seeking
-RETURN_EMPHASIS = 5.0
+RETURN_EMPHASIS = 10.0
 
 # --- Training schedule ---
 REBALANCE_FREQ = 1         # daily rebalancing
